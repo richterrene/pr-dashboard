@@ -76,10 +76,45 @@ python3 pr_dashboard.py --uninstall            # stop the background refresh
 | Windows | Scheduled Task (`schtasks`) |
 
 While the background job runs, it diffs each refresh against the previous one
-and sends a **native desktop notification** for new events (approved, new
-comment, merged, …). If you leave the dashboard open in a browser tab, it
-auto-reloads when fresh data arrives, so the page stays live without a manual
-refresh.
+and sends a **native desktop notification** for new activity. If you leave the
+dashboard open in a browser tab, it auto-reloads when fresh data arrives, so the
+page stays live without a manual refresh.
+
+### When you get a notification
+
+On each scheduled refresh, the agent compares the new data to the previous run
+and fires a notification when it detects one of these changes on one of your PRs:
+
+| Event | Fires when… |
+| --- | --- |
+| ✅ Approved | the review decision flips to `APPROVED` (while open) |
+| 🔧 Changes requested | the review decision flips to `CHANGES_REQUESTED` (while open) |
+| 💬 New comment | the conversation comment count goes up (shows `+N`) |
+| 🎉 Merged | the PR becomes merged |
+| 🚫 Closed | the PR is closed without merging |
+| ❌ CI failed | checks flip to `FAILURE` / `ERROR` (while open) |
+
+So you get it on the **next scheduled refresh after the change** — i.e. within
+one refresh interval (e.g. ≤10 min), **not in real time**. A few details worth
+knowing:
+
+- **Not the first run.** The initial backfill is intentionally silent — detection
+  starts from the *second* refresh onward, so you don't get a storm.
+- **Coalescing.** If a single refresh turns up **more than 5 events**, they're
+  combined into one summary notification ("PR Dashboard — N updates") instead of
+  a flood.
+- **Which PRs are watched.** Notifications only cover what the incremental
+  refresh fetches: all your **open** PRs, anything from the **current year**, and
+  the most **recently-updated closed** PRs. (A merge/close of an older PR is still
+  caught — it was open the previous cycle and shows up in the recently-closed
+  sweep.)
+- **"New comment" tracks the main conversation timeline only.** GitHub stores
+  *inline code-review comments* and *review summary bodies* separately, and those
+  do **not** trigger 💬. A reviewer who approves or requests changes still fires
+  the ✅ / 🔧 event, but pure inline comments may go unnotified.
+- **Your own comments count.** Commenting on your own PR raises the count and will
+  trigger a 💬 notification.
+- A net-zero comment change between refreshes (one added, one deleted) won't notify.
 
 ### Turning notifications on/off
 
@@ -183,8 +218,8 @@ committing.
 - CI status is fetched only for open PRs (it's not meaningful for old merged
   ones and keeps the fetch cheap).
 - Time-to-merge is measured from PR creation to merge.
-- Notifications and the events feed start from your **second** refresh — the
-  first run is a backfill and is intentionally silent (no notification storm).
+- Notifications are not real-time and have a few caveats (inline comments, timing,
+  coalescing) — see [When you get a notification](#when-you-get-a-notification).
 
 ## License
 
