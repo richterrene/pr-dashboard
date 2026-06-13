@@ -1,9 +1,11 @@
 # 📋 PR Dashboard
 
-A self-contained, **local** HTML dashboard for the pull requests *you* have
-authored on GitHub. It shows your pending work organized by review status, plus
-all-time statistics — merge rate, time-to-merge, per-year trends, and a
-per-repository breakdown.
+A self-contained, **local** dashboard for the pull requests *you* have authored
+on GitHub. It shows your pending work organized by review status, a live feed of
+the latest activity, and all-time statistics — merge rate, time-to-merge,
+per-year trends, and a per-repository breakdown. Optionally it runs in the
+background and sends you **desktop notifications** when a PR is approved, gets a
+new comment, is merged, and so on.
 
 No server, no build step, no third-party services. It runs entirely from your
 machine using the [GitHub CLI](https://cli.github.com/) you're already logged
@@ -28,19 +30,18 @@ into, and **your data never leaves your computer**.
 Each card links straight to the PR on GitHub and shows CI status, labels, age,
 and time since last activity (stale PRs are highlighted).
 
-**All-time stats**
+**Latest updates** — a feed of recent activity detected between refreshes:
+approved ✅, new comment 💬, merged 🎉, changes requested 🔧, CI failed ❌, closed 🚫.
 
-- Total PRs, merged count, merge rate, closed-unmerged count
-- Median & mean **time-to-merge**, plus PRs merged in the last 30 / 90 days
-- Lines added / removed across all PRs
-- Charts: PRs per year, outcome (merged/closed/open) per year, time-to-merge
-  distribution, and median time-to-merge trend
-- Sortable per-repository table with merge rate and median time-to-merge
+**All-time stats** — total PRs, merge rate, closed-unmerged count, median & mean
+**time-to-merge**, PRs merged in the last 30 / 90 days, lines added/removed,
+charts (PRs per year, outcome per year, time-to-merge distribution & trend), and
+a sortable per-repository table.
 
 ## Requirements
 
 - [GitHub CLI](https://cli.github.com/) (`gh`), authenticated: `gh auth login`
-- Python 3.8+ (standard library only — no `pip install` needed)
+- Python 3.7+ (standard library only — nothing to `pip install`)
 - Any modern web browser
 
 ## Quick start
@@ -48,37 +49,103 @@ and time since last activity (stale PRs are highlighted).
 ```bash
 git clone https://github.com/<you>/pr-dashboard.git
 cd pr-dashboard
-./refresh.sh          # fetches your PRs, then opens the dashboard
+python3 pr_dashboard.py     # checks your env, fetches your PRs, opens the dashboard
 ```
 
-Or do it in two steps:
+The first run does a full backfill of your PR history (this can take a few
+minutes if you have thousands of PRs — GitHub's API is the bottleneck).
+Every run after that is an **incremental refresh** that takes seconds.
+
+## Staying up to date
+
+By default the dashboard is a snapshot — it reflects the last time you ran the
+fetcher. You can keep it current automatically:
 
 ```bash
-python3 fetch_prs.py  # writes data.js
-open index.html       # macOS — or just double-click the file
+python3 pr_dashboard.py --install              # refresh in the background every 30 min
+python3 pr_dashboard.py --install --interval 10 # ...every 10 min instead
+python3 pr_dashboard.py --uninstall            # stop the background refresh
 ```
 
-That's it. Open `index.html` in your browser any time; re-run the fetcher to
-update.
+`--install` registers a per-user scheduled job using your OS's native mechanism:
+
+| OS | Backend |
+| --- | --- |
+| macOS | `launchd` LaunchAgent (`~/Library/LaunchAgents`) |
+| Linux | `systemd --user` timer (falls back to a `crontab` entry) |
+| Windows | Scheduled Task (`schtasks`) |
+
+While the background job runs, it diffs each refresh against the previous one
+and sends a **native desktop notification** for new events (approved, new
+comment, merged, …). If you leave the dashboard open in a browser tab, it
+auto-reloads when fresh data arrives, so the page stays live without a manual
+refresh.
+
+### Turning notifications on/off
+
+Notifications can be toggled at any time — the setting lives in `config.json`,
+which the background agent re-reads on every run, so there's **no need to
+reinstall**:
+
+```bash
+python3 pr_dashboard.py --notify off      # silence
+python3 pr_dashboard.py --notify on       # re-enable
+python3 pr_dashboard.py --notify status   # show current setting
+```
+
+You can also toggle it **from within the dashboard**. Launch it in served mode:
+
+```bash
+python3 pr_dashboard.py --serve           # http://127.0.0.1:8765, opens your browser
+```
+
+…then click the **🔔 / 🔕 pill in the top-right** to flip notifications on/off.
+(This needs `--serve` because a page opened as a plain `file://` can't write to
+disk. Opened directly, the pill still shows the current state and the command to
+change it.) `--no-notify` additionally silences a single run without changing
+the saved setting.
+
+> **macOS tip:** notifications work out of the box via `osascript`. For
+> clickable notifications that open the PR, install
+> [`terminal-notifier`](https://github.com/julienXX/terminal-notifier)
+> (`brew install terminal-notifier`) — the tool uses it automatically if present.
+>
+> **Linux:** desktop notifications require `notify-send` (from `libnotify`).
+
+## Commands
+
+```bash
+python3 pr_dashboard.py            # check env, fetch, build + open the dashboard
+python3 pr_dashboard.py --serve [--port PORT]   # fetch, then serve on localhost (in-page toggle)
+python3 pr_dashboard.py --no-open  # fetch + build only (what the scheduler runs)
+python3 pr_dashboard.py --check    # environment preflight only, then exit
+python3 pr_dashboard.py --full     # force a complete re-fetch, not just incremental
+python3 pr_dashboard.py --install [--interval MIN]   # schedule background refresh
+python3 pr_dashboard.py --uninstall                  # remove the scheduled job
+python3 pr_dashboard.py --notify on|off|status       # toggle notifications (persistent)
+python3 pr_dashboard.py --no-notify                  # silence just this run
+```
 
 ## How it works
 
 ```
-fetch_prs.py  ──>  cache.json  ──>  data.js  ──>  index.html + dashboard.js
-   (gh API)        (source of        (what the      (renders, Chart.js
-                    truth)            browser loads)  vendored locally)
+pr_dashboard.py  ──>  cache.json  ──>  data.js  ──>  index.html + dashboard.js
+   (gh API)           (source of        (what the      (renders board, feed,
+                       truth)            browser loads)  stats; Chart.js local)
 ```
 
-- `fetch_prs.py` queries GitHub's GraphQL search API for `author:@me type:pr`,
+- `pr_dashboard.py` queries GitHub's GraphQL search API for `author:@me type:pr`,
   sliced by calendar year (the search API caps results at 1000 per query).
-- Results are stored in **`cache.json`**, the local source of truth. It's saved
-  after **every page**, so the fetch is **fully resumable** — if it's
-  interrupted (or GitHub returns a transient 502), just run it again and it
-  picks up where it left off.
-- Merged/closed PRs are **immutable**, so once a past year is fully fetched it's
-  marked complete and skipped on future runs. Only the current year and any year
-  still holding an open PR are re-fetched — so repeat refreshes are fast and
-  stay well under GitHub's rate limits.
+- Results are stored in **`cache.json`**, the local source of truth, saved after
+  **every page** — so the fetch is **fully resumable**. If it's interrupted (or
+  GitHub returns a transient 502), just run it again and it picks up where it
+  left off.
+- Merged/closed PRs are **immutable**, so a fully-fetched past year is frozen and
+  skipped forever after. An incremental refresh re-queries only what can change:
+  your open PRs, the current year, and the most recently-closed PRs — a handful
+  of pages, fast enough to run on a frequent schedule.
+- Each refresh diffs the new data against the previous snapshot to produce the
+  **events** feed and trigger desktop notifications.
 - `data.js` (a single `window.PR_DATA = {…}` assignment) is regenerated from the
   cache. Loading it as a plain `<script>` avoids `file://` CORS issues, so the
   dashboard works by just opening the HTML file — no local web server required.
@@ -90,22 +157,22 @@ fetch_prs.py  ──>  cache.json  ──>  data.js  ──>  index.html + dashb
 This tool runs locally and talks only to GitHub's API via your own `gh` auth.
 
 **Your PR data is never committed.** `data.js` and `cache.json` (which contain
-your PR titles and repository names) are in `.gitignore`. The repository
-contains only the tooling plus synthetic sample data — nothing personal.
-
-If you fork this, keep that `.gitignore` intact before committing.
+your PR titles and repository names), plus the scheduler's `agent.log` files, are
+in `.gitignore`. The repository contains only the tooling plus synthetic sample
+data — nothing personal. If you fork this, keep that `.gitignore` intact before
+committing.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
+| `pr_dashboard.py` | Everything: fetch, build, scheduler install/uninstall, notifications |
 | `index.html` | The dashboard page |
-| `dashboard.js` | Rendering logic (buckets, KPIs, charts, table) |
-| `fetch_prs.py` | Fetches your PRs into `cache.json` → `data.js` |
-| `refresh.sh` | Convenience wrapper: fetch + open |
+| `dashboard.js` | Rendering logic (board, feed, KPIs, charts, table, auto-reload) |
 | `data.sample.js` | Synthetic demo data (no real data) |
 | `vendor/chart.umd.min.js` | Chart.js, vendored for offline use |
 | `data.js`, `cache.json` | **Your** data — generated locally, git-ignored |
+| `config.json` | Local settings (notifications on/off) — git-ignored |
 
 ## Notes & limitations
 
@@ -116,6 +183,8 @@ If you fork this, keep that `.gitignore` intact before committing.
 - CI status is fetched only for open PRs (it's not meaningful for old merged
   ones and keeps the fetch cheap).
 - Time-to-merge is measured from PR creation to merge.
+- Notifications and the events feed start from your **second** refresh — the
+  first run is a backfill and is intentionally silent (no notification storm).
 
 ## License
 

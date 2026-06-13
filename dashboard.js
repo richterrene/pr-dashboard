@@ -7,7 +7,7 @@
     const e = document.getElementById("error");
     e.style.display = "block";
     e.textContent =
-      "No data found. Run `python3 fetch_prs.py` to generate data.js, then reload.";
+      "No data found. Run `python3 pr_dashboard.py` to generate data.js, then reload.";
     return;
   }
 
@@ -21,6 +21,7 @@
 
   function humanDur(ms) {
     if (ms == null) return "—";
+    if (ms < 0) ms = 0; // guard against clock skew / future timestamps
     const h = ms / HOUR;
     if (h < 1) return Math.round(ms / 60000) + "m";
     if (h < 48) return h.toFixed(h < 10 ? 1 : 0) + "h";
@@ -54,9 +55,69 @@
       "border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:13px;";
     b.innerHTML =
       "👋 <b>Showing bundled sample data.</b> Run " +
-      "<code>./refresh.sh</code> (or <code>python3 fetch_prs.py</code>) " +
-      "to load <i>your</i> PRs.";
+      "<code>python3 pr_dashboard.py</code> to load <i>your</i> PRs.";
     document.querySelector(".wrap").prepend(b);
+  }
+
+  // ---- notification toggle ----
+  // The page can only WRITE the setting when served via `pr_dashboard.py --serve`
+  // (the /api/notify endpoint). Opened as a plain file, it shows the current
+  // state read-only plus the CLI command to flip it.
+  setupNotifToggle(data.notify !== false);
+
+  function setupNotifToggle(initialOn) {
+    if (data.sample) return; // nothing to toggle for the demo
+    const el = document.getElementById("notif");
+    el.style.display = "";
+    let served = false;
+    let state = initialOn;
+
+    function paint() {
+      el.classList.toggle("on", state);
+      el.classList.toggle("live", served);
+      const icon = state ? "🔔" : "🔕";
+      const word = state ? "Notifications on" : "Notifications off";
+      if (served) {
+        el.innerHTML = `${icon} ${word} <span class="hint">· click to toggle</span>`;
+        el.title = "Click to turn notifications " + (state ? "off" : "on");
+      } else {
+        const cmd = state ? "--notify off" : "--notify on";
+        el.innerHTML = `${icon} ${word} <span class="hint">· python3 pr_dashboard.py ${cmd}</span>`;
+        el.title = "Serve with `python3 pr_dashboard.py --serve` to toggle from here";
+      }
+    }
+
+    // Probe the API: present only when running under --serve.
+    fetch("/api/notify", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => {
+        served = true;
+        state = j.notify !== false;
+        paint();
+      })
+      .catch(() => paint()); // file:// or plain static server -> read-only
+
+    el.addEventListener("click", () => {
+      if (!served) return;
+      const next = !state;
+      el.style.opacity = "0.5";
+      fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify: next }),
+      })
+        .then((r) => r.json())
+        .then((j) => {
+          state = j.notify !== false;
+        })
+        .catch(() => {})
+        .finally(() => {
+          el.style.opacity = "1";
+          paint();
+        });
+    });
+
+    paint();
   }
 
   // ---- categorize open PRs into pending-work buckets ----
@@ -119,6 +180,42 @@
       <div class="col-body">${body}</div>
     </div>`;
   }).join("");
+
+  // ---- latest-updates feed ----
+  const EV_LABEL = {
+    approved: "✅ Approved",
+    changes_requested: "🔧 Changes requested",
+    commented: "💬 New comment",
+    merged: "🎉 Merged",
+    closed: "🚫 Closed",
+    ci_failed: "❌ CI failed",
+  };
+  function relTime(iso) {
+    const ms = now - parse(iso);
+    if (ms < 0) return "just now";
+    if (ms < HOUR) return Math.max(1, Math.round(ms / 60000)) + "m ago";
+    if (ms < DAY) return Math.round(ms / HOUR) + "h ago";
+    return Math.round(ms / DAY) + "d ago";
+  }
+  const events = Array.isArray(data.events) ? data.events : [];
+  if (events.length) {
+    document.getElementById("updates-h").style.display = "";
+    document.getElementById("updates-box").style.display = "";
+    const lbl = (e) =>
+      EV_LABEL[e.kind] +
+      (e.kind === "commented" && e.delta > 1 ? ` (+${e.delta})` : "");
+    document.getElementById("feed").innerHTML = events
+      .slice(0, 30)
+      .map(
+        (e) => `<li>
+        <span class="ev ${e.kind}">${lbl(e)}</span>
+        <a class="ftitle" href="${e.url}" target="_blank" rel="noopener">${escapeHtml(e.title)}</a>
+        <span class="frepo">${e.repo} #${e.number}</span>
+        <span class="fwhen">${relTime(e.at)}</span>
+      </li>`
+      )
+      .join("");
+  }
 
   // ---- all-time KPIs ----
   const merged = prs.filter((p) => p.state === "MERGED");
@@ -264,8 +361,9 @@
   }));
   const maxTotal = Math.max(...rows.map((r) => r.total));
 
-  let sortKey = "total",
-    sortDir = -1;
+  // Persist the chosen sort across auto-reloads so a background refresh isn't disruptive.
+  let sortKey = sessionStorage.getItem("prDashSortKey") || "total",
+    sortDir = +(sessionStorage.getItem("prDashSortDir") || -1);
   function renderTable() {
     rows.sort((a, b) => {
       let av = a[sortKey],
@@ -300,6 +398,8 @@
         sortKey = k;
         sortDir = k === "repo" ? 1 : -1;
       }
+      sessionStorage.setItem("prDashSortKey", sortKey);
+      sessionStorage.setItem("prDashSortDir", sortDir);
       renderTable();
     });
   });
@@ -309,11 +409,29 @@
   document.getElementById("footnote").textContent =
     `Pending board shows your ${open.length} open PRs. ` +
     `Time-to-merge computed from ${ttms.length} merged PRs. ` +
-    `CI status shown for open PRs only. Re-run fetch_prs.py to refresh.`;
+    `CI status shown for open PRs only. Re-run pr_dashboard.py to refresh.`;
 
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
     );
+  }
+
+  // ---- auto-reload when the background refresh writes new data ----
+  // A scheduled `pr_dashboard.py --no-open` rewrites data.js. If this tab is
+  // left open, poll data.js and reload once its generatedAt changes, so the
+  // view stays current without manual refreshing. (No-op for sample data.)
+  if (!data.sample) {
+    const myStamp = data.generatedAt;
+    setInterval(() => {
+      fetch("data.js?_=" + Date.now(), { cache: "no-store" })
+        .then((r) => (r.ok ? r.text() : null))
+        .then((txt) => {
+          if (!txt) return;
+          const m = txt.match(/"generatedAt"\s*:\s*"([^"]+)"/);
+          if (m && m[1] !== myStamp) location.reload();
+        })
+        .catch(() => {}); // offline / file:// fetch blocked — ignore, manual reload still works
+    }, 120000); // every 2 min
   }
 })();

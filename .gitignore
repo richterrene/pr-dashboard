@@ -3,6 +3,14 @@ data.js
 cache.json
 cache.json.tmp
 
+# Scheduler logs written by the auto-refresh agent
+agent.log
+agent.err.log
+
+# Local settings (notification on/off) — machine-specific
+config.json
+config.json.tmp
+
 # Local tooling / editor
 .claude/
 .DS_Store
@@ -13,3 +21,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Local code-review tooling cache
+.code-review-graph/
