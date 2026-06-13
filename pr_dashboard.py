@@ -99,16 +99,23 @@ query($q: String!, $after: String) {
 }
 """
 
-# Enrichment query for OPEN PRs only: includes CI rollup.
+# Enrichment query for OPEN PRs only: CI rollup + comment-like activity from
+# others. We pull the three places review feedback lives — the conversation
+# timeline (comments), review summaries (reviews), and inline code comments
+# (reviewThreads → comments) — each with its author login, so the 💬 trigger can
+# count activity from people other than you and span inline review comments.
 CI_QUERY = """
 query($q: String!, $after: String) {
-  search(query: $q, type: ISSUE, first: 100, after: $after) {
+  search(query: $q, type: ISSUE, first: 50, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
         number
         repository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+        comments(last: 100) { nodes { author { login } } }
+        reviews(last: 100) { nodes { author { login } state bodyText } }
+        reviewThreads(last: 100) { nodes { comments(last: 50) { nodes { author { login } } } } }
       }
     }
   }
@@ -213,7 +220,8 @@ def normalize(n):
                    for l in n["labels"]["nodes"]],
         "comments": n["comments"]["totalCount"],
         "reviews": n["reviews"]["totalCount"],
-        "ci": None,  # filled in by the enrichment pass for open PRs
+        "ci": None,        # filled in by the enrichment pass for open PRs
+        "activity": None,  # count of comment-like items from others (open PRs)
     }
 
 
@@ -232,9 +240,13 @@ def sweep(cache, q, max_pages=None):
                 continue
             rec = normalize(n)
             k = _key(rec["repo"], rec["number"])
-            # Preserve a previously-enriched CI value if present.
-            if k in cache["prs"] and cache["prs"][k].get("ci") is not None:
-                rec["ci"] = cache["prs"][k]["ci"]
+            # Preserve previously-enriched values (CI + activity) if present.
+            prior = cache["prs"].get(k)
+            if prior:
+                if prior.get("ci") is not None:
+                    rec["ci"] = prior["ci"]
+                if prior.get("activity") is not None:
+                    rec["activity"] = prior["activity"]
             cache["prs"][k] = rec
         save_cache(cache)
         if not page["pageInfo"]["hasNextPage"]:
@@ -265,8 +277,39 @@ def incremental_refresh(cache, cur_year):
     sweep(cache, "author:@me type:pr is:closed sort:updated-desc", max_pages=2)
 
 
-def enrich_open_ci(cache):
-    """Fetch CI rollup for OPEN PRs only (cheap: a handful of PRs)."""
+def _author_login(node):
+    a = node.get("author")
+    return a.get("login") if a else None
+
+
+def _activity_from_others(n, me):
+    """Count comment-like items on a PR authored by someone other than `me`.
+
+    Spans all three places review feedback lives: the conversation timeline,
+    review summaries (only those carrying a body), and inline code comments.
+    """
+    count = 0
+    for c in n.get("comments", {}).get("nodes", []):
+        if _author_login(c) != me:
+            count += 1
+    for r in n.get("reviews", {}).get("nodes", []):
+        # A bare APPROVED/CHANGES_REQUESTED review with no body isn't a "comment";
+        # the ✅/🔧 events already cover those. Count only reviews with text.
+        if _author_login(r) != me and (r.get("bodyText") or "").strip():
+            count += 1
+    for t in n.get("reviewThreads", {}).get("nodes", []):
+        for c in t.get("comments", {}).get("nodes", []):
+            if _author_login(c) != me:
+                count += 1
+    return count
+
+
+def enrich_open_ci(cache, me):
+    """For OPEN PRs: fetch CI rollup and count comment-like activity from others.
+
+    `me` is the authenticated login, used to exclude your own comments from the
+    activity count that drives the 💬 notification.
+    """
     q = "author:@me type:pr state:open"
     after, seen = None, 0
     while True:
@@ -275,13 +318,15 @@ def enrich_open_ci(cache):
             if not n:
                 continue
             k = _key(n["repository"]["nameWithOwner"], n["number"])
+            if k not in cache["prs"]:
+                continue
             rollup = None
             commits = n.get("commits", {}).get("nodes", [])
             if commits and commits[0]["commit"]["statusCheckRollup"]:
                 rollup = commits[0]["commit"]["statusCheckRollup"]["state"]
-            if k in cache["prs"]:
-                cache["prs"][k]["ci"] = rollup
-                seen += 1
+            cache["prs"][k]["ci"] = rollup
+            cache["prs"][k]["activity"] = _activity_from_others(n, me)
+            seen += 1
         if not page["pageInfo"]["hasNextPage"]:
             break
         after = page["pageInfo"]["endCursor"]
@@ -299,7 +344,7 @@ def year_has_open(cache, year):
 def snapshot(cache):
     """Minimal per-PR state used to diff one refresh against the next."""
     return {k: {"state": p["state"], "reviewDecision": p.get("reviewDecision"),
-                "comments": p.get("comments", 0), "ci": p.get("ci"),
+                "activity": p.get("activity"), "ci": p.get("ci"),
                 "isDraft": p.get("isDraft", False)}
             for k, p in cache["prs"].items()}
 
@@ -334,10 +379,13 @@ def detect_events(prev, cache):
                 events.append({**base, "kind": "approved"})
             elif p.get("reviewDecision") == "CHANGES_REQUESTED":
                 events.append({**base, "kind": "changes_requested"})
-        # New comments
-        if p.get("comments", 0) > old.get("comments", 0):
-            events.append({**base, "kind": "commented",
-                           "delta": p["comments"] - old["comments"]})
+        # New comment-like activity from others (conversation + review summaries
+        # + inline code comments; your own comments are excluded upstream).
+        # `activity` is None until a PR has been through open-PR enrichment, so
+        # only compare when both runs have a real count.
+        old_act, new_act = old.get("activity"), p.get("activity")
+        if old_act is not None and new_act is not None and new_act > old_act:
+            events.append({**base, "kind": "commented", "delta": new_act - old_act})
         # CI turned red
         if p["state"] == "OPEN" and old.get("ci") != p.get("ci") \
                 and p.get("ci") in ("FAILURE", "ERROR"):
@@ -415,8 +463,8 @@ def build_data(full=False, notify=True):
         else:
             sys.stderr.write(f"Incremental refresh for @{me}\n")
             incremental_refresh(cache, cur_year)
-        n = enrich_open_ci(cache)
-        sys.stderr.write(f"  CI enriched for {n} open PR(s)\n")
+        n = enrich_open_ci(cache, me)
+        sys.stderr.write(f"  CI + activity enriched for {n} open PR(s)\n")
     except (RuntimeError, KeyboardInterrupt) as e:
         interrupted = True
         sys.stderr.write(f"\n!! Stopped early ({e}).\n"

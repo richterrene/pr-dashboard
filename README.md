@@ -89,7 +89,7 @@ and fires a notification when it detects one of these changes on one of your PRs
 | --- | --- |
 | ✅ Approved | the review decision flips to `APPROVED` (while open) |
 | 🔧 Changes requested | the review decision flips to `CHANGES_REQUESTED` (while open) |
-| 💬 New comment | the conversation comment count goes up (shows `+N`) |
+| 💬 New comment | someone else adds a comment — conversation, inline code review, or a review with a body (shows `+N`) |
 | 🎉 Merged | the PR becomes merged |
 | 🚫 Closed | the PR is closed without merging |
 | ❌ CI failed | checks flip to `FAILURE` / `ERROR` (while open) |
@@ -108,12 +108,14 @@ knowing:
   the most **recently-updated closed** PRs. (A merge/close of an older PR is still
   caught — it was open the previous cycle and shows up in the recently-closed
   sweep.)
-- **"New comment" tracks the main conversation timeline only.** GitHub stores
-  *inline code-review comments* and *review summary bodies* separately, and those
-  do **not** trigger 💬. A reviewer who approves or requests changes still fires
-  the ✅ / 🔧 event, but pure inline comments may go unnotified.
-- **Your own comments count.** Commenting on your own PR raises the count and will
-  trigger a 💬 notification.
+- **💬 covers all three comment sources.** Conversation-timeline comments,
+  *inline code-review comments*, and reviews that carry a body all count. A bare
+  approve / request-changes with no text doesn't fire 💬 — the ✅ / 🔧 event
+  already covers it.
+- **Your own comments are excluded.** Only activity from *other* people triggers
+  💬, so commenting on your own PR won't ping you.
+- **One-cycle warm-up.** The first refresh after installing (or upgrading) records
+  the comment baseline silently; 💬 detection is live from the cycle after that.
 - A net-zero comment change between refreshes (one added, one deleted) won't notify.
 
 ### Turning notifications on/off
