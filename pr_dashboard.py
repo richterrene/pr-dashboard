@@ -61,7 +61,13 @@ DEFAULT_INTERVAL_MIN = 30   # default auto-refresh cadence
 HOME = os.path.expanduser("~")
 JOB_LABEL = "io.github.prdashboard"   # macOS launchd / Linux systemd unit id
 JOB_NAME = "PRDashboard"              # human-facing Windows Scheduled Task name
+JOB_DISPLAY_NAME = "PR Dashboard"     # macOS Login Items display name
 PLIST_PATH = os.path.join(HOME, "Library", "LaunchAgents", JOB_LABEL + ".plist")
+# macOS labels a Login Item after the launched executable's enclosing .app
+# bundle, so we run Python through a tiny wrapper bundle. Without this it shows
+# up as "python3.14" instead of "PR Dashboard".
+APP_BUNDLE = os.path.join(HOME, "Library", "Application Support",
+                          JOB_LABEL, JOB_DISPLAY_NAME + ".app")
 SYSTEMD_DIR = os.path.join(HOME, ".config", "systemd", "user")
 SYSTEMD_SERVICE = os.path.join(SYSTEMD_DIR, JOB_LABEL + ".service")
 SYSTEMD_TIMER = os.path.join(SYSTEMD_DIR, JOB_LABEL + ".timer")
@@ -479,7 +485,7 @@ _PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
   <key>Label</key><string>{label}</string>
   <key>ProgramArguments</key><array>
-{args}
+    <string>{exe}</string>
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>{path}</string>
@@ -491,13 +497,50 @@ _PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 </dict></plist>
 """
 
+_APP_INFO_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>{name}</string>
+  <key>CFBundleDisplayName</key><string>{name}</string>
+  <key>CFBundleIdentifier</key><string>{label}</string>
+  <key>CFBundleExecutable</key><string>{name}</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSUIElement</key><true/>
+</dict></plist>
+"""
+
+
+def _build_app_bundle():
+    """Create a minimal .app wrapper so macOS shows a friendly Login Item name.
+
+    launchd/Login Items label an agent after the running executable's name. Run
+    Python directly and it shows as "python3.14"; run it through a bundle whose
+    executable is named "PR Dashboard" and that's what the user sees instead.
+    Returns the path to the wrapper executable to point the LaunchAgent at.
+    """
+    shutil.rmtree(APP_BUNDLE, ignore_errors=True)  # rebuild from scratch
+    macos_dir = os.path.join(APP_BUNDLE, "Contents", "MacOS")
+    os.makedirs(macos_dir, exist_ok=True)
+    with open(os.path.join(APP_BUNDLE, "Contents", "Info.plist"), "w") as f:
+        f.write(_APP_INFO_PLIST.format(name=JOB_DISPLAY_NAME, label=JOB_LABEL))
+    run = os.path.join(macos_dir, JOB_DISPLAY_NAME)  # named after the bundle
+    cmd = " ".join('"%s"' % a for a in [sys.executable, SCRIPT, "--no-open"])
+    with open(run, "w") as f:
+        f.write("#!/bin/sh\nexec %s\n" % cmd)
+    os.chmod(run, 0o755)
+    # Unsigned bundles get attributed to the raw executable name in Login Items;
+    # an ad-hoc signature makes macOS honor CFBundleName instead.
+    if _have("codesign"):
+        subprocess.run(["codesign", "--force", "--deep", "-s", "-", APP_BUNDLE],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    return run
+
 
 def _install_launchd(interval_sec):
     os.makedirs(os.path.dirname(PLIST_PATH), exist_ok=True)
-    prog = [sys.executable, SCRIPT, "--no-open"]
-    args = "\n".join("    <string>%s</string>" % a for a in prog)
+    exe = _build_app_bundle()
     with open(PLIST_PATH, "w") as f:
-        f.write(_PLIST.format(label=JOB_LABEL, args=args, interval=interval_sec,
+        f.write(_PLIST.format(label=JOB_LABEL, exe=exe, interval=interval_sec,
                               path=os.environ.get("PATH", ""),
                               log=LOG_PATH, err=ERR_PATH))
     subprocess.run(["launchctl", "unload", PLIST_PATH],
@@ -511,13 +554,16 @@ def _install_launchd(interval_sec):
 
 
 def _uninstall_launchd():
+    removed = False
     if os.path.exists(PLIST_PATH):
         subprocess.run(["launchctl", "unload", PLIST_PATH],
                        stderr=subprocess.DEVNULL, check=False)
         os.remove(PLIST_PATH)
         print("Removed launchd agent %s" % PLIST_PATH)
-        return True
-    return False
+        removed = True
+    if os.path.isdir(APP_BUNDLE):
+        shutil.rmtree(APP_BUNDLE, ignore_errors=True)
+    return removed
 
 
 # ---------------------------------------------------------------------------
