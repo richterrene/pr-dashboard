@@ -43,6 +43,8 @@ a sortable per-repository table.
 - [GitHub CLI](https://cli.github.com/) (`gh`), authenticated: `gh auth login`
 - Python 3.7+ (standard library only — nothing to `pip install`)
 - Any modern web browser
+- *Optional, for desktop notifications:* `terminal-notifier` (macOS) or
+  `notify-send` (Linux) — see [Notification permissions per OS](#notification-permissions-per-os)
 
 ## Quick start
 
@@ -142,12 +144,33 @@ disk. Opened directly, the pill still shows the current state and the command to
 change it.) `--no-notify` additionally silences a single run without changing
 the saved setting.
 
-> **macOS tip:** notifications work out of the box via `osascript`. For
-> clickable notifications that open the PR, install
-> [`terminal-notifier`](https://github.com/julienXX/terminal-notifier)
-> (`brew install terminal-notifier`) — the tool uses it automatically if present.
+### Notification permissions per OS
+
+Desktop notifications are **not fully automatic** — each OS gates them the first
+time, and macOS in particular needs a one-time approval:
+
+> **macOS.** There's nothing to `pip install`, but macOS requires a **one-time
+> permission grant**, and notifications sent from a background `launchd` agent
+> are *silently dropped* until the sending app has been allowed. For this to work
+> reliably, install
+> [`terminal-notifier`](https://github.com/julienXX/terminal-notifier):
+> ```bash
+> brew install terminal-notifier
+> ```
+> The tool uses it automatically when present (it also makes notifications
+> **clickable** — opening the PR on GitHub). Fire a test to trigger the one-time
+> allow prompt, then approve **terminal-notifier** under *System Settings →
+> Notifications*:
+> ```bash
+> python3 -c "import importlib.util as u; s=u.spec_from_file_location('p','pr_dashboard.py'); m=u.module_from_spec(s); s.loader.exec_module(m); m._notify_one('PR Dashboard','Notifications are working ✅')"
+> ```
+> Without `terminal-notifier` the tool falls back to `osascript`, which works
+> from a terminal but is unreliable from the background agent.
 >
-> **Linux:** desktop notifications require `notify-send` (from `libnotify`).
+> **Linux.** Desktop notifications require `notify-send` (from `libnotify`),
+> typically already present on GNOME/KDE; no per-app allow step.
+>
+> **Windows.** Toasts work out of the box via PowerShell — no manual approval.
 
 ## Commands
 
