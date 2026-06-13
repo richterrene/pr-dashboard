@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Pull Requests</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --purple: #a371f7;
+    --gray: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 28px 64px; }
+  h2 { font-size: 16px; margin: 32px 0 14px; font-weight: 600; }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .kpi .num { font-size: 26px; font-weight: 700; }
+  .kpi .lbl { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kpi .sub { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+  /* Pending board */
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .col {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    display: flex; flex-direction: column; min-height: 80px;
+  }
+  .col h3 {
+    margin: 0; padding: 12px 14px; font-size: 13px; font-weight: 600;
+    border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
+    align-items: center; gap: 8px;
+  }
+  .col h3 .badge { background: var(--panel-2); color: var(--muted); border-radius: 20px;
+    padding: 1px 9px; font-size: 12px; font-weight: 600; }
+  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 560px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .col.draft  h3 { border-top: 3px solid var(--gray); border-radius: 10px 10px 0 0; }
+  .col.review h3 { border-top: 3px solid var(--amber); border-radius: 10px 10px 0 0; }
+  .col.changes h3 { border-top: 3px solid var(--red); border-radius: 10px 10px 0 0; }
+  .col.ready  h3 { border-top: 3px solid var(--green); border-radius: 10px 10px 0 0; }
+
+  .card {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .card .t { font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
+  .card .repo { color: var(--muted); font-size: 11.5px; }
+  .card .row2 { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; align-items: center;
+    color: var(--muted); font-size: 11.5px; }
+  .pill { padding: 1px 7px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    border: 1px solid transparent; white-space: nowrap; }
+  .pill.ci-SUCCESS  { color: var(--green);  border-color: rgba(63,185,80,.4); }
+  .pill.ci-FAILURE, .pill.ci-ERROR { color: var(--red); border-color: rgba(248,81,73,.4); }
+  .pill.ci-PENDING, .pill.ci-EXPECTED { color: var(--amber); border-color: rgba(210,153,34,.4); }
+  .lbl-chip { padding: 0 7px; border-radius: 20px; font-size: 10.5px; font-weight: 600;
+    border: 1px solid; line-height: 17px; }
+  .age { margin-left: auto; }
+  .age.stale { color: var(--amber); }
+  .age.old { color: var(--red); }
+  .empty { color: var(--muted); font-size: 12px; padding: 14px; text-align: center; }
+
+  /* charts */
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+  .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .chart-box h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .chart-box canvas { max-height: 280px; }
+
+  /* repo table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
+  th:hover { color: var(--text); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--panel-2); }
+  .bar-cell { position: relative; }
+  .mini-bar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(88,166,255,.12); }
+  .mini-bar > span { position: relative; padding-left: 10px; }
+
+  .footnote { color: var(--muted); font-size: 12px; margin-top: 24px; }
+  .toggle { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 My Pull Requests</h1>
+  <span class="meta" id="meta"></span>
+</header>
+
+<div class="wrap">
+  <div id="error" style="display:none; color:var(--red); padding:16px; border:1px solid var(--red); border-radius:8px;"></div>
+
+  <h2>Pending work</h2>
+  <div class="board" id="board"></div>
+
+  <h2>All-time overview</h2>
+  <div class="kpis" id="kpis"></div>
+
+  <h2>Trends &amp; distribution</h2>
+  <div class="charts">
+    <div class="chart-box"><h3>PRs opened per year</h3><canvas id="byYear"></canvas></div>
+    <div class="chart-box"><h3>Outcome by year (merged / closed / open)</h3><canvas id="outcome"></canvas></div>
+    <div class="chart-box"><h3>Time-to-merge distribution</h3><canvas id="ttmDist"></canvas></div>
+    <div class="chart-box"><h3>Median time-to-merge by year (hours)</h3><canvas id="ttmYear"></canvas></div>
+  </div>
+
+  <h2>By repository <span class="toggle">(click a header to sort)</span></h2>
+  <div class="chart-box" style="padding:0; overflow:hidden;">
+    <table id="repoTable">
+      <thead><tr>
+        <th data-k="repo">Repository</th>
+        <th class="num" data-k="total">Total</th>
+        <th class="num" data-k="merged">Merged</th>
+        <th class="num" data-k="open">Open</th>
+        <th class="num" data-k="closed">Closed</th>
+        <th class="num" data-k="mergeRate">Merge&nbsp;%</th>
+        <th class="num" data-k="medTtm">Median&nbsp;TTM</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p class="footnote" id="footnote"></p>
+</div>
+
+<script src="vendor/chart.umd.min.js"></script>
+<!-- data.js is generated by fetch_prs.py and git-ignored (contains your PRs).
+     If it's missing (fresh clone), we fall back to the bundled sample so the
+     dashboard still renders a demo. -->
+<script>
+  document.write(
+    '<scr' + 'ipt src="data.js" onerror="window.__noData=true"></scr' + 'ipt>'
+  );
+</script>
+<script>
+  if (window.__noData || !window.PR_DATA) {
+    document.write('<scr' + 'ipt src="data.sample.js"></scr' + 'ipt>');
+  }
+</script>
+<script src="dashboard.js"></script>
+</body>
+</html>

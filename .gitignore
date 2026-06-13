@@ -1,0 +1,15 @@
+# Personal data — NEVER commit. These contain your PR titles and repo names.
+data.js
+cache.json
+cache.json.tmp
+
+# Local tooling / editor
+.claude/
+.DS_Store
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
