@@ -52,7 +52,7 @@
     const b = document.createElement("div");
     b.style.cssText =
       "background:#1c2230;border:1px solid var(--amber);color:var(--amber);" +
-      "border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:13px;";
+      "border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:0.93rem;";
     b.innerHTML =
       "👋 <b>Showing bundled sample data.</b> Run " +
       "<code>python3 pr_dashboard.py</code> to load <i>your</i> PRs.";
@@ -204,17 +204,52 @@
     const lbl = (e) =>
       EV_LABEL[e.kind] +
       (e.kind === "commented" && e.delta > 1 ? ` (+${e.delta})` : "");
-    document.getElementById("feed").innerHTML = events
-      .slice(0, 30)
-      .map(
-        (e) => `<li>
+    const feedEl = document.getElementById("feed");
+
+    function renderFeed(limit) {
+      const shown = limit === "all" ? events : events.slice(0, limit);
+      feedEl.innerHTML = shown
+        .map(
+          (e) => `<li>
         <span class="ev ${e.kind}">${lbl(e)}</span>
         <a class="ftitle" href="${e.url}" target="_blank" rel="noopener">${escapeHtml(e.title)}</a>
         <span class="frepo">${e.repo} #${e.number}</span>
         <span class="fwhen">${relTime(e.at)}</span>
       </li>`
-      )
-      .join("");
+        )
+        .join("");
+    }
+
+    // Switchable count: 10 (default) / 50 / 100 / All. Only offer sizes the
+    // feed can actually reach, plus "All" to navigate the complete list.
+    const OPTIONS = [10, 50, 100].filter((n) => n < events.length);
+    OPTIONS.push("all");
+    const labelFor = (o) => (o === "all" ? `All (${events.length})` : String(o));
+
+    let feedLimit = sessionStorage.getItem("prDashFeedLimit") || "10";
+    feedLimit = feedLimit === "all" ? "all" : +feedLimit;
+    if (feedLimit !== "all" && !OPTIONS.includes(feedLimit)) feedLimit = OPTIONS[0];
+
+    const seg = document.getElementById("feed-seg");
+    if (OPTIONS.length > 1) {
+      seg.innerHTML = OPTIONS.map(
+        (o) => `<button data-n="${o}">${labelFor(o)}</button>`
+      ).join("");
+      const paintSeg = () =>
+        seg.querySelectorAll("button").forEach((b) =>
+          b.classList.toggle("active", b.dataset.n === String(feedLimit))
+        );
+      seg.addEventListener("click", (ev) => {
+        const b = ev.target.closest("button");
+        if (!b) return;
+        feedLimit = b.dataset.n === "all" ? "all" : +b.dataset.n;
+        sessionStorage.setItem("prDashFeedLimit", feedLimit);
+        paintSeg();
+        renderFeed(feedLimit);
+      });
+      paintSeg();
+    }
+    renderFeed(feedLimit);
   }
 
   // ---- all-time KPIs ----
