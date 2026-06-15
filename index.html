@@ -33,7 +33,7 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   header {
-    padding: 20px 28px;
+    padding: 20px clamp(12px, 1vw, 24px);
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: baseline;
@@ -49,7 +49,7 @@
   header .notif.live:hover { border-color: var(--accent); color: var(--text); }
   header .notif.on { color: var(--green); border-color: rgba(63,185,80,.4); }
   header .notif .hint { color: var(--muted); font-size: 0.79rem; }
-  .wrap { width: 100%; max-width: min(2400px, 95vw); margin: 0 auto; padding: 24px clamp(16px, 2vw, 40px) 64px; }
+  .wrap { width: 100%; max-width: min(3200px, 99vw); margin: 0 auto; padding: 24px clamp(12px, 1vw, 24px) 64px; }
   h2 { font-size: 1.14rem; margin: 32px 0 14px; font-weight: 600; }
 
   /* KPI cards */
@@ -75,7 +75,10 @@
   }
   .col h3 .badge { background: var(--panel-2); color: var(--muted); border-radius: 20px;
     padding: 1px 9px; font-size: 0.86rem; font-weight: 600; }
-  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 560px; }
+  /* One card per row — cards stretch to fill the full tile width. Grows taller
+     on tall screens before it starts scrolling. */
+  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px;
+    overflow-y: auto; max-height: clamp(560px, 72vh, 1100px); }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
   .col.draft  h3 { border-top: 3px solid var(--gray); border-radius: 10px 10px 0 0; }
   .col.review h3 { border-top: 3px solid var(--amber); border-radius: 10px 10px 0 0; }
