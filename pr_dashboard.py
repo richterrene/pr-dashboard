@@ -400,7 +400,7 @@ def write_data_js(cache, me, events_feed, notify_on=True):
         "user": me,
         "count": len(prs),
         "prs": prs,
-        "events": events_feed[:50],  # most recent first, capped
+        "events": events_feed[:200],  # most recent first; UI offers 10/50/100/All
         "notify": notify_on,         # current notification setting (for the UI)
     }
     with open(DATA_PATH, "w") as f:

@@ -20,11 +20,15 @@
     --gray: #6e7681;
   }
   * { box-sizing: border-box; }
+  /* Root font scales with viewport width: a touch larger than the old 14px on
+     laptops, ramping up on wide / high-res screens (capped so ultrawides don't
+     get cartoonish). All component sizes below are in rem, so they follow. */
+  html { font-size: clamp(15px, 0.2vw + 12.5px, 18px); }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font: 1rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -36,17 +40,17 @@
     gap: 16px;
     flex-wrap: wrap;
   }
-  header h1 { font-size: 20px; margin: 0; }
-  header .meta { color: var(--muted); font-size: 13px; }
-  header .notif { margin-left: auto; font-size: 12.5px; border: 1px solid var(--border);
+  header h1 { font-size: 1.43rem; margin: 0; }
+  header .meta { color: var(--muted); font-size: 0.93rem; }
+  header .notif { margin-left: auto; font-size: 0.89rem; border: 1px solid var(--border);
     border-radius: 20px; padding: 4px 12px; color: var(--muted); background: var(--panel);
     user-select: none; }
   header .notif.live { cursor: pointer; }
   header .notif.live:hover { border-color: var(--accent); color: var(--text); }
   header .notif.on { color: var(--green); border-color: rgba(63,185,80,.4); }
-  header .notif .hint { color: var(--muted); font-size: 11px; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 28px 64px; }
-  h2 { font-size: 16px; margin: 32px 0 14px; font-weight: 600; }
+  header .notif .hint { color: var(--muted); font-size: 0.79rem; }
+  .wrap { width: 100%; max-width: min(2400px, 95vw); margin: 0 auto; padding: 24px clamp(16px, 2vw, 40px) 64px; }
+  h2 { font-size: 1.14rem; margin: 32px 0 14px; font-weight: 600; }
 
   /* KPI cards */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
@@ -54,9 +58,9 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
     padding: 16px 18px;
   }
-  .kpi .num { font-size: 26px; font-weight: 700; }
-  .kpi .lbl { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .kpi .sub { color: var(--muted); font-size: 11px; margin-top: 6px; }
+  .kpi .num { font-size: 1.86rem; font-weight: 700; }
+  .kpi .lbl { color: var(--muted); font-size: 0.86rem; margin-top: 2px; }
+  .kpi .sub { color: var(--muted); font-size: 0.79rem; margin-top: 6px; }
 
   /* Pending board */
   .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
@@ -65,12 +69,12 @@
     display: flex; flex-direction: column; min-height: 80px;
   }
   .col h3 {
-    margin: 0; padding: 12px 14px; font-size: 13px; font-weight: 600;
+    margin: 0; padding: 12px 14px; font-size: 0.93rem; font-weight: 600;
     border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
     align-items: center; gap: 8px;
   }
   .col h3 .badge { background: var(--panel-2); color: var(--muted); border-radius: 20px;
-    padding: 1px 9px; font-size: 12px; font-weight: 600; }
+    padding: 1px 9px; font-size: 0.86rem; font-weight: 600; }
   .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 560px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
   .col.draft  h3 { border-top: 3px solid var(--gray); border-radius: 10px 10px 0 0; }
@@ -82,30 +86,30 @@
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
     padding: 10px 12px;
   }
-  .card .t { font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
-  .card .repo { color: var(--muted); font-size: 11.5px; }
+  .card .t { font-weight: 600; font-size: 0.93rem; display: block; margin-bottom: 4px; }
+  .card .repo { color: var(--muted); font-size: 0.82rem; }
   .card .row2 { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; align-items: center;
-    color: var(--muted); font-size: 11.5px; }
-  .pill { padding: 1px 7px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    color: var(--muted); font-size: 0.82rem; }
+  .pill { padding: 1px 7px; border-radius: 20px; font-size: 0.79rem; font-weight: 600;
     border: 1px solid transparent; white-space: nowrap; }
   .pill.ci-SUCCESS  { color: var(--green);  border-color: rgba(63,185,80,.4); }
   .pill.ci-FAILURE, .pill.ci-ERROR { color: var(--red); border-color: rgba(248,81,73,.4); }
   .pill.ci-PENDING, .pill.ci-EXPECTED { color: var(--amber); border-color: rgba(210,153,34,.4); }
-  .lbl-chip { padding: 0 7px; border-radius: 20px; font-size: 10.5px; font-weight: 600;
+  .lbl-chip { padding: 0 7px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
     border: 1px solid; line-height: 17px; }
   .age { margin-left: auto; }
   .age.stale { color: var(--amber); }
   .age.old { color: var(--red); }
-  .empty { color: var(--muted); font-size: 12px; padding: 14px; text-align: center; }
+  .empty { color: var(--muted); font-size: 0.86rem; padding: 14px; text-align: center; }
 
   /* charts */
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
   .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .chart-box h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .chart-box h3 { margin: 0 0 12px; font-size: 0.93rem; font-weight: 600; color: var(--muted); }
   .chart-box canvas { max-height: 280px; }
 
   /* repo table */
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
   th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
   th:hover { color: var(--text); }
@@ -115,15 +119,23 @@
   .mini-bar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(88,166,255,.12); }
   .mini-bar > span { position: relative; padding-left: 10px; }
 
-  .footnote { color: var(--muted); font-size: 12px; margin-top: 24px; }
-  .toggle { font-size: 12px; color: var(--muted); }
+  .footnote { color: var(--muted); font-size: 0.86rem; margin-top: 24px; }
+  .toggle { font-size: 0.86rem; color: var(--muted); }
 
   /* latest-updates feed */
-  ul.feed { list-style: none; margin: 0; padding: 0; }
+  .seg { display: inline-flex; margin-left: 12px; border: 1px solid var(--border);
+    border-radius: 7px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: var(--panel); color: var(--muted); border: none;
+    border-left: 1px solid var(--border); cursor: pointer; font-family: inherit;
+    font-size: 0.86rem; font-weight: 500; padding: 3px 11px; }
+  .seg button:first-child { border-left: none; }
+  .seg button:hover { color: var(--text); }
+  .seg button.active { background: var(--panel-2); color: var(--text); }
+  ul.feed { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; }
   ul.feed li { display: flex; align-items: center; gap: 12px; padding: 9px 14px;
-    border-bottom: 1px solid var(--border); font-size: 13px; }
+    border-bottom: 1px solid var(--border); font-size: 0.93rem; }
   ul.feed li:last-child { border-bottom: none; }
-  ul.feed .ev { font-size: 12px; font-weight: 600; white-space: nowrap; min-width: 152px; }
+  ul.feed .ev { font-size: 0.86rem; font-weight: 600; white-space: nowrap; min-width: 152px; }
   ul.feed .ev.approved { color: var(--green); }
   ul.feed .ev.changes_requested { color: var(--red); }
   ul.feed .ev.commented { color: var(--accent); }
@@ -131,8 +143,8 @@
   ul.feed .ev.closed { color: var(--gray); }
   ul.feed .ev.ci_failed { color: var(--red); }
   ul.feed .ftitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ul.feed .frepo { color: var(--muted); font-size: 11.5px; }
-  ul.feed .fwhen { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  ul.feed .frepo { color: var(--muted); font-size: 0.82rem; }
+  ul.feed .fwhen { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -148,7 +160,9 @@
   <h2>Pending work</h2>
   <div class="board" id="board"></div>
 
-  <h2 id="updates-h" style="display:none">Latest updates</h2>
+  <h2 id="updates-h" style="display:none">Latest updates
+    <span class="seg" id="feed-seg" role="group" aria-label="Number of updates to show"></span>
+  </h2>
   <div class="chart-box" id="updates-box" style="display:none; padding:0;">
     <ul class="feed" id="feed"></ul>
   </div>
